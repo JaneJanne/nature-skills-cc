@@ -1,0 +1,43 @@
+name: Sync upstream skills
+
+# 每日自动同步上游 Yuan1z0825/nature-skills 的 skills/ 到本仓库。
+# 上游已移除 .claude-plugin（转向 Codex 分发），本仓库补回 Claude Code
+# 插件清单（.claude-plugin/，静态文件，不参与同步），供
+# `claude plugin marketplace add https://github.com/JaneJanne/nature-skills-cc` 使用。
+
+on:
+  schedule:
+    - cron: "17 20 * * *" # 每日 UTC 20:17（北京时间次日 04:17）
+  workflow_dispatch: # 允许在 Actions 页面手动触发
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch upstream (shallow)
+        run: git clone --depth 1 https://github.com/Yuan1z0825/nature-skills.git /tmp/upstream
+
+      - name: Sync skills/
+        run: rsync -a --delete /tmp/upstream/skills/ skills/
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "sync-bot"
+          git config user.email "JaneJanne@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "上游无变化，跳过提交"
+          else
+            SHA=$(git -C /tmp/upstream rev-parse --short HEAD)
+            git commit -m "sync: upstream Yuan1z0825/nature-skills@$SHA"
+            git push
+          fi
